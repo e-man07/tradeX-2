@@ -5,7 +5,7 @@
 Use this format to mint an NFT into your collection:
 
 ```
-Mint NFT named "Cosmic Explorer #1" with description "The first explorer in our cosmic series" in collection YOUR_COLLECTION_ADDRESS with image https://i.imgur.com/XpRY3ax.jpg
+Mint NFT named "Cosmic Explorer #1" with description "The first explorer in our cosmic series" in collection HFu4CRe6BFayNLSQsZwFXoUJF862RnaUJvZScKQcQ3gC with image https://coral-decisive-bug-514.mypinata.cloud/ipfs/bafybeigs2dt7mizvaafhcsmjy626wbyfp463omhu6kcfnmewaejffmxhmy
 ```
 
 Replace `YOUR_COLLECTION_ADDRESS` with your own collection address.
