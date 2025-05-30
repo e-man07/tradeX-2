@@ -15,9 +15,27 @@ export const getUserId = (): string | null => {
   if (typeof window === 'undefined') return null;
   
   try {
-    // Get userId directly as a string - no need to parse JSON
+    // First try to get userId directly
     const userId = localStorage.getItem('userId');
-    return userId;
+    if (userId) return userId;
+    
+    // If not found, try to get it from the stored user object
+    const storedUser = localStorage.getItem('tradeXUser');
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      if (user && user.id) return user.id;
+    }
+    
+    // If still not found, check if we have a pubKey that can be used
+    // This is a fallback mechanism
+    const pubKey = localStorage.getItem('pubKey');
+    if (pubKey) {
+      // Use the pubKey as a userId if nothing else is available
+      console.log('Using pubKey as userId fallback');
+      return pubKey;
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error getting user ID:', error);
     return null;
@@ -30,6 +48,10 @@ export const getUserId = (): string | null => {
 export const fetchWithAuth = async (url: string, options: ApiOptions = {}) => {
   const userId = getUserId();
   
+  // Debug information
+  console.log('\n\n\nMaking authenticated request to:', url);
+  console.log('User ID for request:', userId);
+  
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -38,14 +60,30 @@ export const fetchWithAuth = async (url: string, options: ApiOptions = {}) => {
   // Add user ID to headers if available
   if (userId) {
     headers['user-id'] = userId;
+    
+    // Also try adding as Authorization header in case the API expects it there
+    if (!headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${userId}`;
+    }
   }
   
-
+  // Check for token in localStorage
+  const token = localStorage.getItem('authToken');
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
   const fetchOptions: RequestInit = {
     method: options.method || 'GET',
     headers,
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   };
+  
+  console.log('Request headers:', headers);
+  console.log('Request options:', {
+    method: fetchOptions.method,
+    hasBody: !!options.body
+  });
   
   return fetch(url, fetchOptions);
 };
@@ -59,12 +97,29 @@ export const conversationsApi = {
     const userId = getUserId();
     if (!userId) throw new Error('User not authenticated');
     
-    const response = await fetchWithAuth('/api/conversations');
-    console.log("Response data:", response);
-    if (!response.ok) {
-      throw new Error('Failed to fetch conversations');
+    try {
+      console.log('Fetching conversations for user:', userId);
+      
+      // Try with query parameter as fallback
+      const url = `/api/conversations?userId=${encodeURIComponent(userId)}`;
+      const response = await fetchWithAuth(url);
+      
+      console.log("Response status:", response.status);
+      console.log("Response headers:", Object.fromEntries([...response.headers.entries()]));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`Failed to fetch conversations: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error in getAll conversations:', error);
+      // Return empty array as fallback to prevent UI errors
+      return [];
     }
-    return response.json();
   },
   
   // Get a single conversation by ID

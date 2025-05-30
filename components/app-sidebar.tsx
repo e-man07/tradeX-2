@@ -75,11 +75,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   // Fetch conversations when component mounts or user changes
-  // React.useEffect(() => {
-  //   if (user || pubKey) {
-  //     fetchConversations();
-  //   }
-  // }, [user, pubKey]);
+  React.useEffect(() => {
+    if (user || pubKey) {
+      fetchConversations();
+    }
+  }, [user, pubKey]);
 
 
   // function to fetch all the conversation 
@@ -87,6 +87,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setIsLoadingConversations(true);
     setError(null);
     try {
+      // Debug information
+      console.log("Fetching conversations...");
+      console.log("Current user or pubKey:", {user, pubKey});
+      const storedUserId = localStorage.getItem('userId');
+      console.log("Stored userId in localStorage:", storedUserId);
+      const storedUser = localStorage.getItem('tradeXUser');
+      console.log("Stored user in localStorage:", storedUser);
+      
+      // Check if we have a valid userId before making the API call
+      if (!storedUserId) {
+        throw new Error("No user ID available for API requests");
+      }
+      
       // Use the conversationsApi utility from utils/api.ts
       const data = await conversationsApi.getAll();
       console.log("Fetched conversations:", data);
@@ -97,9 +110,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       
       // If the API call fails, ensure we have a valid user ID
       if (!localStorage.getItem('userId') && pubKey) {
-        // Store pubKey as userId if needed
-        localStorage.setItem('userId', pubKey);
-        console.log("Stored pubKey as userId for future requests");
+        // Try to get user ID from context or create one from pubKey
+        const userId = user?.id || `wallet_${pubKey.substring(0, 8)}`;
+        localStorage.setItem('userId', userId);
+        console.log("Created and stored user ID for future requests:", userId);
+        
+        // Also create a minimal user object if none exists
+        if (!localStorage.getItem('tradeXUser')) {
+          const userEmail = localStorage.getItem('userEmail') || '';
+          const username = userEmail ? userEmail.split('@')[0] : `user_${userId.substring(0, 5)}`;
+          
+          const userData = {
+            id: userId,
+            email: userEmail,
+            username: username
+          };
+          
+          localStorage.setItem('tradeXUser', JSON.stringify(userData));
+          console.log("Created and stored user object:", userData);
+        }
       }
     } finally {
       setIsLoadingConversations(false);
@@ -172,7 +201,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // If no userId in localStorage but we have pubKey, store it
     if (!storedUserId && pubKey) {
       console.log("Storing pubKey as userId:", pubKey);
-      localStorage.setItem('userId', pubKey);
+      localStorage.setItem('userId', user?.id || '');
     }
     
     fetchConversations();

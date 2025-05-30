@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
+import { useAuth } from "@/hooks/AuthContext";
 import axios from "axios";
 import { UserDataInterface } from "@/app/types/UserDataInterface";
 import { responseCookiesToRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
@@ -24,6 +25,8 @@ export default function TempLogin() {
     walletExists,
     authenticate,
   } = useWallet();
+  
+  const { login } = useAuth();
 
   const toggleMode = () => setSign(!sign);
 
@@ -52,9 +55,40 @@ export default function TempLogin() {
         throw new Error("Server not running!");
       }
 
-        localStorage.setItem("userId", response.data.token.userId);
-        setIsAuthenticated(true);
+      // Get the userId directly from the response
+      const userId = response.data.userId;
+      
+      // Store the token for authentication
+      const token = response.data.token;
+      if (token) {
+        localStorage.setItem("authToken", token);
+      }
+      
+      // Store the userId
+      if (userId) {
+        localStorage.setItem("userId", userId);
+        console.log("User ID stored in localStorage:", userId);
+      } else {
+        console.error("No user ID received from registration API");
+      }
+      
+      // Create a user object
+      const userData = {
+        id: userId || '',
+        email: email,
+        username: email.split('@')[0]
+      };
+      
+      // Store the complete user object for future sessions
+      localStorage.setItem("tradeXUser", JSON.stringify(userData));
+      localStorage.setItem("userEmail", email);
+      
+      // Set wallet as authenticated
+      setIsAuthenticated(true);
       console.log("isAuthenticated:", isAuthenticated);
+      
+      // After successful registration, automatically log in
+      await login(email, password);
     } catch (error) {
       console.error("Error during registration:", error);
     }
@@ -64,19 +98,29 @@ export default function TempLogin() {
     e.preventDefault();
 
     try {
-      const data = {
-        email: email,
-        password: password,
-      };
+      // First use the AuthContext login function to set the user state
+      const loginSuccess = await login(email, password);
+      
+      if (loginSuccess) {
+        console.log("Login successful with AuthContext");
+        
+        // Now make a direct API call to get the wallet data
+        const response = await axios.post("/api/auth/login", {
+          email: email,
+          password: password,
+        });
+        
+        console.log("Response data:", response.data);
 
-      console.log("User data:", data);
-
-      const response = await axios.post("/api/auth/login", data);
-      console.log("Response data:", response.data);
-
-      if (response.status === 200) {
-        importWallet(response.data.secretKey, password);
-        localStorage.setItem("userId", response.data.userId);
+        if (response.status === 200) {
+          // Import the wallet with the secret key
+          importWallet(response.data.secretKey, password);
+          
+          // Set the wallet as authenticated
+          setIsAuthenticated(true);
+        }
+      } else {
+        console.error("Login failed");
       }
     } catch (error) {
       console.error("Error during login:", error);

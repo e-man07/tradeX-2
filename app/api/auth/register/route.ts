@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import NCrypt from "ncrypt-js";
-import { v4 as uuidv4} from "uuid";
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "default_secret";
@@ -58,11 +57,14 @@ export async function POST(request: NextRequest) {
     });
 
     console.log("This is the token", token);
+    console.log("User ID:", user.id);
 
     return NextResponse.json(
       {
         message: "User registered successfully",
         token,
+        userId: user.id,  // Include the user ID directly in the response
+        email: user.email // Include email for consistency with login route
       },
       { status: 201 }
     );
