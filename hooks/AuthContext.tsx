@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useWallet } from "@/hooks/useWallet";
 
 type User = {
   id: string;
@@ -28,8 +29,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Check if we have a user in localStorage
         const storedUser = localStorage.getItem("tradeXUser");
+        const userId = localStorage.getItem("userId");
+        
         if (storedUser) {
+          // If we have a complete user object, use it
           setUser(JSON.parse(storedUser));
+        } else if (userId) {
+          // If we only have a userId (from wallet login), create a basic user object
+          // This ensures user is not null even if only wallet authentication was used
+          const email = localStorage.getItem("userEmail") || "";
+          const username = email ? email.split('@')[0] : `user_${userId.substring(0, 5)}`;
+          
+          const userData: User = {
+            id: userId,
+            email: email,
+            username: username
+          };
+          
+          setUser(userData);
+          // Store the complete user object for future sessions
+          localStorage.setItem("tradeXUser", JSON.stringify(userData));
         }
       } catch (error) {
         console.error("Error checking user session:", error);
@@ -53,21 +72,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await response.json();
+      console.log("**********************")
+      console.log('login response', data)
+      console.log("**********************")
 
       if (!response.ok) {
         throw new Error(data.message || "Login failed");
       }
 
-      // Assuming the API returns user data including id, email, and username
+      // Create user object from API response
+      // The API returns userId directly, not nested in a user object
       const userData: User = {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.username,
+        id: data.userId,
+        // Since the API doesn't return email and username, use email from params
+        // and generate a username from the email
+        email: email,
+        username: email.split('@')[0],
       };
 
+      console.log("Login successful, user data:", userData);
+      
       // Store user data in state and localStorage
       setUser(userData);
       localStorage.setItem("tradeXUser", JSON.stringify(userData));
+      
+      // Also store userId and email separately for wallet integration
+      localStorage.setItem("userId", data.userId);
+      localStorage.setItem("userEmail", email);
+      
       return true;
     } catch (error) {
       console.error("Login error:", error);
@@ -81,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear user from state and localStorage
     setUser(null);
     localStorage.removeItem("tradeXUser");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("userEmail");
   };
 
   const getUserId = (): string | null => {
