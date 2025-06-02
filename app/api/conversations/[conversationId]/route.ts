@@ -11,7 +11,10 @@ function isValidObjectId(id: string): boolean {
 }
 
 // Get messages for a specific conversation
-export async function GET(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function GET(
+  req: NextRequest, 
+  { params }: { params: Promise<{ conversationId: string }> }
+) {
   try {
     const { conversationId } = await params;
     const userId = req.headers.get("user-id");
@@ -73,7 +76,10 @@ export async function GET(req: NextRequest, { params }: { params: { conversation
 }
 
 // Send a message in a conversation
-export async function POST(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function POST(
+  req: NextRequest, 
+  { params }: { params: Promise<{ conversationId: string }> }
+) {
   try {
     const { conversationId } = await params;
     const userId = req.headers.get("user-id");
@@ -183,7 +189,10 @@ export async function POST(req: NextRequest, { params }: { params: { conversatio
 }
 
 // Update conversation title
-export async function PATCH(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function PATCH(
+  req: NextRequest, 
+  { params }: { params: Promise<{ conversationId: string }> }
+) {
   try {
     const { conversationId } = await params;
     const userId = req.headers.get("user-id");
@@ -229,7 +238,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { conversati
 }
 
 // Delete a conversation
-export async function DELETE(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function DELETE(
+  req: NextRequest, 
+  { params }: { params: Promise<{ conversationId: string }> }
+) {
   try {
     const { conversationId } = await params;
     const userId = req.headers.get("user-id");
