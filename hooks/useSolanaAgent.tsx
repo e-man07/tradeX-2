@@ -20,10 +20,9 @@ import {
   keypairIdentity,
 } from "@metaplex-foundation/js";
 
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { mintTo, createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
-
 
 
 interface SwapData {
@@ -37,12 +36,14 @@ interface TransferData {
   amount: string;
   token: string;
 }
+
 interface pumpFunTokenData {
   tokenName: string;
   tokenTicker: string;
   tokenDescription: string;
   tokenImage: any;
 }
+
 interface NFTMintData {
   name: string;
   description: string;
@@ -51,6 +52,7 @@ interface NFTMintData {
   symbol?: string;
   attributes?: Array<{ trait_type: string; value: string }>;
 }
+
 interface CollectionData {
   name: string;
   symbol: string;
@@ -197,7 +199,6 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!keyPair) {
       throw new Error("Keypair is not initialized.");
     }
-
     const { from, to, amount } = data;
 
     // Handle SOL directly by providing the wrapped SOL mint address
@@ -432,12 +433,16 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
    * @param data 
    * @returns 
    */
+
   const processcreateCollection = async (
     data: CollectionData
   ): Promise<{ collectionAddress: PublicKey; signature: string }> => {
     if (!keyPair) {
       throw new Error("Keypair is not initialized.");
     }
+
+    let connection: Connection | undefined;
+    let metaplex: Metaplex | undefined;
 
     try {
       console.log("Starting collection creation with data:", {
@@ -447,158 +452,112 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
         hasImage: !!data.image,
         royaltyBasisPoints: data.royaltyBasisPoints,
       });
-      
-      // Try multiple RPC endpoints in case the primary one fails
+
+      // Try multiple RPC endpoints
       const rpcEndpoints = [
         `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
         'https://api.devnet.solana.com',
-        'https://devnet.genesysgo.net'
+        'https://devnet.genesysgo.net',
       ];
-      
-      let connection;
-      let metaplex;
-      let mintKeypair = Keypair.generate();
-      
-      // Try each RPC endpoint until one works
+
       for (const endpoint of rpcEndpoints) {
         try {
           console.log(`Attempting with RPC endpoint: ${endpoint.split('?')[0]}`);
           connection = new Connection(endpoint, 'confirmed');
-          
-          // Check if the RPC is responsive
-          await connection.getLatestBlockhash();
-          
-          metaplex = Metaplex.make(connection)
-            .use(keypairIdentity(keyPair));
-          
+          await connection.getLatestBlockhash(); // Check if responsive
+          metaplex = Metaplex.make(connection).use(keypairIdentity(keyPair));
           console.log("Successfully connected to RPC");
-          break;
+          break; // Exit loop on success
         } catch (rpcError) {
           console.warn(`RPC endpoint ${endpoint.split('?')[0]} failed, trying next...`);
+          metaplex = undefined; // Reset on failure
         }
-      }
-      
-      if (!connection || !metaplex) {
-        throw new Error("Failed to connect to any RPC endpoint. Please try again later.");
-      }
-      
-      // Handle image processing (simplified for clarity)
-      let imageFile: File;
-      try {
-        if (typeof data.image === "string") {
-          const imageResponse = await fetch(data.image);
-          if (!imageResponse.ok) {
-            throw new Error(`Failed to fetch image: ${imageResponse.status}`);
-          }
-          const imageBlob = await imageResponse.blob();
-          imageFile = new File([imageBlob], "collection_image.png", { 
-            type: imageResponse.headers.get('content-type') || "image/png" 
-          });
-        } else if (data.image instanceof File) {
-          imageFile = data.image;
-        } else if (data.image instanceof Uint8Array) {
-          imageFile = new File([data.image], "collection_image.png", { type: "image/png" });
-        } else {
-          throw new Error("Invalid image format");
-        }
-      } catch (imageError: any) {
-        throw new Error(`Image processing failed: ${imageError.message}`);
       }
 
-      // Upload to IPFS
-      console.log("Uploading collection metadata to IPFS...");
+      if (!metaplex || !connection) {
+        throw new Error("Failed to connect to any RPC endpoint. Please try again later.");
+      }
+
+      // --- Image Processing ---
+      let imageFile: File;
+      if (typeof data.image === "string") {
+        const imageResponse = await fetch(data.image);
+        if (!imageResponse.ok) throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+        const imageBlob = await imageResponse.blob();
+        imageFile = new File([imageBlob], "collection_image.png", { type: imageResponse.headers.get('content-type') || "image/png" });
+      } else if (data.image instanceof File) {
+        imageFile = data.image;
+      } else if (data.image instanceof Uint8Array) {
+        imageFile = new File([data.image], "collection_image.png", { type: "image/png" });
+      } else {
+        throw new Error("Invalid image format. Must be a URL string, File, or Uint8Array.");
+      }
+
+      // --- IPFS Upload ---
       const formData = new FormData();
       formData.append("name", data.name);
       formData.append("symbol", data.symbol);
       formData.append("description", data.description);
       formData.append("file", imageFile);
-      
-      const ipfsResponse = await fetch("/api/ipfs", {
-        method: "POST",
-        body: formData,
-      });
 
+      const ipfsResponse = await fetch("/api/ipfs", { method: "POST", body: formData });
       if (!ipfsResponse.ok) {
         const errorData = await ipfsResponse.json();
         throw new Error(`IPFS upload failed: ${errorData.error || ipfsResponse.statusText}`);
       }
-
       const ipfsData = await ipfsResponse.json();
       console.log("Metadata uploaded to IPFS:", ipfsData.metadataUri);
-      
-      // Set up creators array
-      const creators = data.creators?.map(creator => ({
-        address: new PublicKey(creator.address),
-        share: creator.percentage,
-        verified: creator.address === keyPair.publicKey.toString()
-      })) || [{ address: keyPair.publicKey, share: 100, verified: true }];
-      
-      // SIMPLER APPROACH: Create collection with minimal options
-      console.log("Creating collection with streamlined approach");
-      try {
-        // Initialize mint account first to ensure it exists
-        console.log("Generating mint account:", mintKeypair.publicKey.toString());
-        
-        // Create the NFT with minimal options for better reliability
-        const { nft, response: txResponse } = await metaplex.nfts().create({
-          uri: ipfsData.metadataUri,
-          name: data.name,
-          symbol: data.symbol,
-          sellerFeeBasisPoints: data.royaltyBasisPoints || 500,
-          isCollection: true,
-          creators: creators,
-          useNewMint: mintKeypair,
-        });
-        
-        console.log("Collection creation transaction sent:", txResponse.signature);
-        
-        // Wait for confirmations with timeout
-        let confirmed = false;
-        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 30000));
-        const confirmPromise = (async () => {
-          try {
-            await connection.confirmTransaction(txResponse.signature, 'confirmed');
-            confirmed = true;
-          } catch (e) {
-            console.error("Confirmation error:", e);
-          }
-        })();
-        
-        await Promise.race([confirmPromise, timeoutPromise]);
-        
-        if (!confirmed) {
-          console.warn("Transaction confirmation timed out, but transaction may still be successful");
-        }
-        
-        console.log("Collection created with address:", nft.address.toString());
-        
-        // Introduce a small delay to allow indexing
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        return {
-          collectionAddress: nft.address,
-          signature: txResponse.signature
-        };
-      } catch (nftError: any) {
-        if (nftError.logs) {
-          console.error("Transaction logs:", nftError.logs);
-        }
-        
-        // Specific error handling
-        if (nftError.message && nftError.message.includes("AccountNotFoundError")) {
-          throw new Error("RPC node is having synchronization issues. Please try again in a few minutes.");
-        } else if (nftError.message && nftError.message.includes("0x1")) {
-          throw new Error("Transaction simulation failed. Please check your SOL balance.");
-        } else {
-          throw new Error(`Collection creation failed: ${nftError.message}`);
-        }
-      }
+
+      // --- NFT Collection Creation ---
+      const creators = data.creators?.map(c => ({ 
+        address: new PublicKey(c.address), 
+        share: c.percentage, 
+        verified: c.address === keyPair.publicKey.toString()
+      })) || [
+        { address: keyPair.publicKey, share: 100, verified: true },
+      ];
+
+      const mintKeypair = Keypair.generate();
+      const { nft, response: txResponse } = await metaplex.nfts().create({
+        uri: ipfsData.metadataUri,
+        name: data.name,
+        symbol: data.symbol,
+        sellerFeeBasisPoints: data.royaltyBasisPoints || 500,
+        isCollection: true,
+        creators: creators,
+        useNewMint: mintKeypair,
+      });
+      console.log("Collection creation transaction sent:", txResponse.signature);
+
+      // --- Transaction Confirmation ---
+      await connection.confirmTransaction(txResponse.signature, 'confirmed');
+      console.log("Transaction confirmed.");
+
+      console.log("Collection created with address:", nft.address.toString());
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Delay for indexing
+
+      return {
+        collectionAddress: nft.address,
+        signature: txResponse.signature,
+      };
+
     } catch (error: any) {
       console.error("Error in processcreateCollection:", error);
-      throw new Error(`Failed to create collection: ${error.message}`);
+      if (error.logs) {
+        console.error("Transaction logs:", error.logs);
+      }
+
+      // Provide more specific error messages
+      if (error.message?.includes("AccountNotFoundError")) {
+        throw new Error("RPC node may be out of sync. Please try again.");
+      } else if (error.message?.includes("0x1") || error.message?.includes("Transaction simulation failed")) {
+        throw new Error("Transaction simulation failed. Check your SOL balance.");
+      } else {
+        throw new Error(`Collection creation failed: ${error.message}`);
+      }
     }
   };
-
+    
 /**
  * Function for minting the data 
  * @param data 
@@ -607,7 +566,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
   const processNFTMint = async (
     data: NFTMintData
   ): Promise<{ mint: PublicKey; metadata: PublicKey }> => {
-    if (!keyPair) {
+    if (!Keypair) {
       throw new Error("Keypair is not initialized.");
     }
   
@@ -738,7 +697,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
           sellerFeeBasisPoints: 0,
           creators: [
             {
-              address: keyPair.publicKey,
+              address: keyPair?.publicKey,
               share: 100,
               verified: true,
             },
@@ -801,9 +760,6 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
       throw new Error(error.message || "Failed to mint NFT");
     }
   };
-  
-
-
 
   return (
     <AgentContext.Provider
@@ -813,10 +769,9 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     </AgentContext.Provider>
   );
 };
-
-export const useSolanaAgent = () => {
-  const context = useContext(AgentContext);
-  if (!context)
-    throw new Error("useSolanaAgent must be used within AgentProvider");
-  return context;
-};
+  export const useSolanaAgent = () => {
+    const context = useContext(AgentContext);
+    if (!context)
+      throw new Error("useSolanaAgent must be used within AgentProvider");
+    return context;
+  };

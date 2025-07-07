@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/client";
-import { ObjectId } from "mongodb";
-
+import { getUserId } from "@/utils/api";
 // Helper function to check if a string is a valid MongoDB ObjectId
 function isValidObjectId(id: string): boolean {
   const objectIdPattern = /^[0-9a-fA-F]{24}$/;
@@ -11,18 +10,12 @@ function isValidObjectId(id: string): boolean {
 // Get all conversations for a user
 export async function GET(req: NextRequest) {
   try {
-    // In Next.js, we get headers differently
-    const userId = req.headers.get("user-id");
+    // Get the user ID from the request headers
+    const userId = req.headers.get("userId");
+    console.log("Fetching conversations for userId from headers:", userId);
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required in headers" }, { status: 400 });
-    }
-
-    // Validate userId format
-    if (!isValidObjectId(userId)) {
-      return NextResponse.json({ 
-        error: "Invalid userId format. Must be a valid MongoDB ObjectId (24 character hex string)" 
-      }, { status: 400 });
     }
 
     const conversations = await prisma.conversation.findMany({
@@ -51,19 +44,15 @@ export async function GET(req: NextRequest) {
 // Create a new conversation
 export async function POST(req: NextRequest) {
   try {
-    const userId = req.headers.get("user-id");
     const body = await req.json();
     const { title } = body;
+    
+    // Get userId from request headers
+    const userId = req.headers.get("userId");
+    console.log("This is the userId from headers:", userId);
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required in headers" }, { status: 400 });
-    }
-
-    // Validate userId format
-    if (!isValidObjectId(userId)) {
-      return NextResponse.json({ 
-        error: "Invalid userId format. Must be a valid MongoDB ObjectId (24 character hex string)" 
-      }, { status: 400 });
     }
 
     if (!title || typeof title !== "string") {

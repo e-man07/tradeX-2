@@ -11,30 +11,11 @@ type ApiOptions = {
 /**
  * Get the user ID from localStorage
  */
-export const getUserId = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  
+export const getUserId = () : string | null => {
+ 
   try {
-    // First try to get userId directly
     const userId = localStorage.getItem('userId');
     if (userId) return userId;
-    
-    // If not found, try to get it from the stored user object
-    const storedUser = localStorage.getItem('tradeXUser');
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      if (user && user.id) return user.id;
-    }
-    
-    // If still not found, check if we have a pubKey that can be used
-    // This is a fallback mechanism
-    const pubKey = localStorage.getItem('pubKey');
-    if (pubKey) {
-      // Use the pubKey as a userId if nothing else is available
-      console.log('Using pubKey as userId fallback');
-      return pubKey;
-    }
-    
     return null;
   } catch (error) {
     console.error('Error getting user ID:', error);
@@ -59,14 +40,14 @@ export const fetchWithAuth = async (url: string, options: ApiOptions = {}) => {
   
   // Add user ID to headers if available
   if (userId) {
-    headers['user-id'] = userId;
+    headers['userId'] = userId;
     
     // Also try adding as Authorization header in case the API expects it there
     if (!headers['Authorization']) {
       headers['Authorization'] = `Bearer ${userId}`;
     }
   }
-  
+
   // Check for token in localStorage
   const token = localStorage.getItem('authToken');
   if (token && !headers['Authorization']) {
@@ -79,8 +60,8 @@ export const fetchWithAuth = async (url: string, options: ApiOptions = {}) => {
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   };
   
-  console.log('Request headers:', headers);
-  console.log('Request options:', {
+   console.log('Request headers:', headers);
+   console.log('Request options:', {
     method: fetchOptions.method,
     hasBody: !!options.body
   });
@@ -102,6 +83,7 @@ export const conversationsApi = {
       
       // Try with query parameter as fallback
       const url = `/api/conversations?userId=${encodeURIComponent(userId)}`;
+      console.log("This is the URL, for fetching the conversations with auth", url);
       const response = await fetchWithAuth(url);
       
       console.log("Response status:", response.status);

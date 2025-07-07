@@ -5,6 +5,8 @@ import TempLogin from "@/components/TempLogin";
 import { useWallet } from "@/hooks/useWallet";
 import Chat from "@/components/Chat";
 import { useSolanaAgent } from "@/hooks/useSolanaAgent";
+
+
 export default function Agent() {
   const { isAuthenticated } = useWallet();
 
@@ -16,3 +18,5 @@ export default function Agent() {
     return <TempLogin />;
   }
 }
+
+

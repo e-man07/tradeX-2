@@ -31,6 +31,7 @@ export default function ConversationList() {
     try {
       const data = await conversationsApi.getAll();
       setConversations(data);
+      console.log("This is the conversation", data);
     } catch (err) {
       console.error("Error fetching conversations:", err);
       setError("Failed to load conversations");
@@ -39,7 +40,7 @@ export default function ConversationList() {
     }
   };
 
-  const handleCreateConversation = async (e: React.FormEvent) => {
+const handleCreateConversation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
@@ -49,13 +50,14 @@ export default function ConversationList() {
       const newConversation = await conversationsApi.create(newTitle);
       setConversations([newConversation, ...conversations]);
       setNewTitle("");
+      console.log("This is the conversation", newConversation);
     } catch (err) {
       console.error("Error creating conversation:", err);
       setError("Failed to create conversation");
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   if (authLoading) {
     return <div className="p-4">Loading authentication...</div>;

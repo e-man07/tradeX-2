@@ -17,7 +17,7 @@ export async function GET(
 ) {
   try {
     const { conversationId } = await params;
-    const userId = req.headers.get("user-id");
+    const userId = req.headers.get("userId");
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required in headers" }, { status: 400 });
@@ -82,7 +82,7 @@ export async function POST(
 ) {
   try {
     const { conversationId } = await params;
-    const userId = req.headers.get("user-id");
+    const userId = req.headers.get("userId");
     const body = await req.json();
     const { content } = body;
 
@@ -195,7 +195,7 @@ export async function PATCH(
 ) {
   try {
     const { conversationId } = await params;
-    const userId = req.headers.get("user-id");
+    const userId = req.headers.get("userId");
     const body = await req.json();
     const { title } = body;
 
@@ -244,7 +244,7 @@ export async function DELETE(
 ) {
   try {
     const { conversationId } = await params;
-    const userId = req.headers.get("user-id");
+    const userId = req.headers.get("userId");
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required in headers" }, { status: 400 });
