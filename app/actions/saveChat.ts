@@ -9,23 +9,29 @@ export const saveChat = async (userId: string, messages: Message[]) => {
 
   const prisma = new PrismaClient();
   try {
-    const response = await prisma.chat.create({
+    // Create conversation with messages in a transaction
+    const response = await prisma.conversation.create({
       data: {
+        title: messages[0]?.content?.substring(0, 100) || "New Conversation",
         userId,
         messages: {
           create: messages.map((message) => ({
-            sender: message.sender,
             content: message.content,
-            chatId: message.chatId || null,
-          })),
-        },
+            senderType: message.sender === 'User' ? 'User' : 'System',
+            senderId: message.sender === 'User' ? userId : null,
+          }))
+        }
       },
+      include: {
+        messages: true,
+        user: true
+      }
     });
-    
+
     if (!response) {
       throw new Error('Failed to create chat');
     }
-    
+
     return response;
   } catch (err) {
     console.error('Error saving chat:', err);
