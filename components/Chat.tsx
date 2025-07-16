@@ -29,7 +29,7 @@ interface ConversationWithMessages extends Conversation {
 }
 
 export default function Chat() {
-  const { processTransfer, processSwap, processPumpFunToken } = useSolanaAgent();
+  const { processTransfer, processSwap } = useSolanaAgent();
   const { balance } = useBalance();
   const wallet = useWallet();
   const [currentChat, setCurrentChat] = useState<ConversationWithMessages | null>(null);
@@ -79,29 +79,29 @@ export default function Chat() {
   };
   
   // Submit handlers for forms
-  const submitCreateToken = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tokenData.tokenName || !tokenData.tokenTicker || !tokenData.tokenDescription || !tokenData.tokenImage) {
-      alert('Please fill all fields');
-      return;
-    }
+  // const submitCreateToken = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   if (!tokenData.tokenName || !tokenData.tokenTicker || !tokenData.tokenDescription || !tokenData.tokenImage) {
+  //     alert('Please fill all fields');
+  //     return;
+  //   }
     
-    try {
-      setIsLoading(true);
-      const result = await processPumpFunToken({
-        tokenName: tokenData.tokenName,
-        tokenTicker: tokenData.tokenTicker,
-        tokenDescription: tokenData.tokenDescription,
-        tokenImage: tokenData.tokenImage
-      });
-      alert(`Token created successfully! Token address: ${result.tokenAddress}`);
-      setShowCreateTokenModal(false);
-    } catch (error: any) {
-      alert(`Error creating token: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  //   try {
+  //     setIsLoading(true);
+  //     const result = await processPumpFunToken({
+  //       tokenName: tokenData.tokenName,
+  //       tokenTicker: tokenData.tokenTicker,
+  //       tokenDescription: tokenData.tokenDescription,
+  //       tokenImage: tokenData.tokenImage
+  //     });
+  //     alert(`Token created successfully! Token address: ${result.tokenAddress}`);
+  //     setShowCreateTokenModal(false);
+  //   } catch (error: any) {
+  //     alert(`Error creating token: ${error.message}`);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
   
   const submitSwap = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,7 +211,7 @@ export default function Chat() {
             
             {/* Modals */}
             {/* Create Token Modal */}
-            {showCreateTokenModal && (
+            {/* {showCreateTokenModal && (
               <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" style={{ fontFamily: "'Josefin Sans', 'Space Grotesk', 'Ubuntu', sans-serif" }}>
                 <div className="bg-[#000000] rounded-lg shadow-xl w-full max-w-md p-6 border border-[#B6B09F]">
                   <h2 className="text-xl font-bold mb-4 text-[#EAE4D5]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Create New Token</h2>
@@ -280,7 +280,7 @@ export default function Chat() {
                   </form>
                 </div>
               </div>
-            )}
+            )} */}
             
             {/* Swap Tokens Modal */}
             {showSwapModal && (

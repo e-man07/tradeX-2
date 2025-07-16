@@ -32,7 +32,7 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
   const [isTyping, setIsTyping] = useState(false);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const { pubKey } = useWallet();
-  const { processSwap, processTransfer, processPumpFunToken, processNFTMint, processcreateCollection } = useSolanaAgent();
+  const { processSwap, processTransfer, processNFTMint, processcreateCollection } = useSolanaAgent();
   const balanceContext = useContext(BalanceContext);
   // Get shared state from ChatContext
   const { clearMessages, setClearMessages, messages, setMessages, currentConversationId, setCurrentConversationId, loadConversation, setShouldRefreshConversations } = useChatContext();
@@ -314,9 +314,9 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
         case "TransferData":
           signature = await processTransfer(result.data.response);
           break;
-        case "pumpFunTokenData":
-          signature = await processPumpFunToken(result.data.response);
-          break;
+        // case "pumpFunTokenData":
+        //   signature = await processPumpFunToken(result.data.response);
+        //   break;
         case "mintNFT":
           await handleAction(result.data.response);
           break;
