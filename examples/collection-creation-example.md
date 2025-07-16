@@ -3,7 +3,7 @@
 ## Basic Collection Creation Prompt
 
 ```
-Create an NFT collection named "Cosmic Explorers" with symbol "CSMX" and description "A collection of cosmic explorers traversing the galaxy" with image https://ipfs.io/ipfs/QmXyNMhV8bQFp6wzoVpkz3NUCRuLYrP2Uc4dCZBfhHjPNQ"
+Create NFT collection called "Ethereal Artifacts" with symbol "EART", description "Mystical artifacts from the ethereal plane with magical properties", royalty 7.5%, and image https://coral-decisive-bug-514.mypinata.cloud/ipfs/bafkreiatc3hqxqjyj2gtxl"
 ```
 
 ## Advanced Collection Creation with Royalties

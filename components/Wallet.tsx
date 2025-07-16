@@ -25,7 +25,7 @@ const Wallet = () => {
               className="w-full mb-4 px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
-              onClick={()=>authenticate(password)}
+              onClick={()=>authenticate(password)} 
               className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
             >
               Unlock Wallet
