@@ -126,7 +126,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     const tokenListProvider = new TokenListProvider();
     const tokenList = await tokenListProvider.resolve();
     console.log("tokenlist", tokenList);
-    const tokens = tokenList.filterByChainId(103).getList(); // Devnet chainId is 103
+    const tokens = tokenList.filterByChainId(101).getList(); // Devnet chainId is 103 and mainnet is 101 
     const token = tokens.find((t) => t.symbol === symbol);
     return token ? token.address : null;
   }
@@ -134,13 +134,13 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
   //Initialize agent
   const agent = new SolanaAgentKit(
     `${secKey}`,
-    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
+    `https://mainnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
     `${process.env.GEMINI_API_KEY}`,
   );
 
   // Initialze metaplex 
   const connection = new Connection(
-    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}` || clusterApiUrl('devnet')
+    `https://mainnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}` || clusterApiUrl('devnet')
   );
   
   const getMetaplex = () => {

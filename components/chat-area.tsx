@@ -309,6 +309,9 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           }
           break;
         case "SwapData":
+          console.log(
+            "This is the data response", result.data.response
+          )
           signature = await processSwap(result.data.response);
           break;
         case "TransferData":
