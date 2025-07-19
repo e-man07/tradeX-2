@@ -157,7 +157,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     const tokenListProvider = new TokenListProvider();
     const tokenList = await tokenListProvider.resolve();
     console.log("tokenlist", tokenList);
-    const tokens = tokenList.filterByChainId(101).getList(); // Devnet chainId is 103 and mainnet is 101 
+    const tokens = tokenList.filterByChainId(103).getList(); // Devnet chainId is 103 and mainnet is 101 
     const token = tokens.find((t) => t.symbol === symbol);
     return token ? token.address : null;
   }
@@ -165,13 +165,13 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
   //Initialize agent
   const agent = new SolanaAgentKit(
     `${secKey}`,
-    `https://mainnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
+    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
     `${process.env.GEMINI_API_KEY}`,
   );
 
   // Initialze metaplex 
   const connection = new Connection(
-    `https://mainnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}` || clusterApiUrl('devnet')
+    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}` || clusterApiUrl('devnet')
   );
   
   const getMetaplex = () => {
@@ -640,7 +640,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
   const processNFTMint = async (
     data: NFTMintData
   ): Promise<{ mint: PublicKey; metadata: PublicKey }> => {
-    if (!Keypair) {
+    if (!keyPair) {
       throw new Error("Keypair is not initialized.");
     }
   
@@ -656,7 +656,38 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
         hasAttributes: !!attributes && attributes.length > 0
       });
       
-      const metaplex = getMetaplex();
+      // Try multiple RPC endpoints in case the primary one fails
+      const rpcEndpoints = [
+        `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
+        'https://api.devnet.solana.com',
+        'https://devnet.genesysgo.net'
+      ];
+      
+      let connection;
+      let metaplex;
+      
+      // Try each RPC endpoint until one works
+      for (const endpoint of rpcEndpoints) {
+        try {
+          console.log(`Attempting with RPC endpoint: ${endpoint.split('?')[0]}`);
+          connection = new Connection(endpoint, 'confirmed');
+          
+          // Check if the RPC is responsive
+          await connection.getLatestBlockhash();
+          
+          metaplex = Metaplex.make(connection)
+            .use(metaplexKeypairIdentity(keyPair));
+          
+          console.log("Successfully connected to RPC for NFT minting");
+          break;
+        } catch (rpcError) {
+          console.warn(`RPC endpoint ${endpoint.split('?')[0]} failed, trying next...`);
+        }
+      }
+      
+      if (!connection || !metaplex) {
+        throw new Error("Failed to connect to any RPC endpoint for NFT minting. Please try again later.");
+      }
 
       // Verify collection mint exists before proceeding
       let collectionExists = false;
