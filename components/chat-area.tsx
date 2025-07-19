@@ -1,11 +1,14 @@
 "use client";
 
 import { useSolanaAgent } from "@/hooks/useSolanaAgent";
-import { Bot, Send, User } from "lucide-react";
+import { Bot, Send, User, Mic, MicOff } from "lucide-react";
 import { useEffect, useRef, useState, useContext } from "react";
 import { Message as PrismaMessage, Conversation } from '@prisma/client';
 import { conversationsApi } from '@/utils/api';
 import { useChatContext, Message as ChatMessage } from '@/hooks/ChatContext';
+import { AgentPersonality } from '@/utils/agentPersonality';
+import { ErrorRecoverySystem } from '@/utils/errorRecovery';
+import { useVoiceCommands } from '@/hooks/useVoiceCommands';
 
 // Helper function to check if a string is a valid MongoDB ObjectId
 function isValidObjectId(id: string): boolean {
@@ -30,6 +33,26 @@ interface ChatAreaProps {
 export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
   const [inputValue, setInputValue] = useState<string>("");
   const [isTyping, setIsTyping] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  
+  // Voice commands hook
+  const { startListening, stopListening, transcript, isListening, error: voiceError, lastCommand } = useVoiceCommands();
+  
+  // Handle transcript updates
+  useEffect(() => {
+    if (transcript) {
+      setVoiceTranscript(transcript);
+      setInputValue(transcript);
+    }
+  }, [transcript]);
+  
+  // Handle voice commands
+  useEffect(() => {
+    if (lastCommand) {
+      handleVoiceCommand(lastCommand);
+    }
+  }, [lastCommand]);
+  
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const { pubKey } = useWallet();
   const { processSwap, processTransfer, processNFTMint, processcreateCollection, processSPLTokenCreation } = useSolanaAgent();
@@ -199,6 +222,15 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
       // Add user message to both local state and ChatContext
       const userMessage = createNewMessage(inputValue, 'User');
       
+      // Update currentChat state
+      setCurrentChat((prev: ConversationWithMessages | null) => {
+        if (!prev) return { messages: [userMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+        return { 
+          ...prev, 
+          messages: [...(prev.messages || []), userMessage]
+        } as ConversationWithMessages;
+      });
+      
       // Update messages in ChatContext
       setMessages((prevMessages: ChatMessage[]) => {
         const newMessages = [...prevMessages, {
@@ -284,7 +316,18 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
       console.log("case ----> ", result.data.response.interface);
       switch (result.data.response.interface) {
         case "regularPrompt":
-          const systemMessage = createNewMessage(result.data.response.message.content, 'System');
+          // Add personality to the response
+          const enhancedContent = addPersonality(result.data.response.message.content);
+          const systemMessage = createNewMessage(enhancedContent, 'System');
+          
+          // Update currentChat state
+          setCurrentChat((prev: ConversationWithMessages | null) => {
+            if (!prev) return { messages: [systemMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+            return { 
+              ...prev, 
+              messages: [...(prev.messages || []), systemMessage]
+            } as ConversationWithMessages;
+          });
           
           // Update messages in ChatContext
           setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
@@ -299,7 +342,7 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
             try {
               // Send the message to the API
               await conversationsApi.addMessages(currentChat.id, [{
-                content: result.data.response.message.content,
+                content: enhancedContent,
                 senderType: 'System'
               }]);
             } catch (error) {
@@ -410,6 +453,138 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
     }
   };
 
+  // Enhanced error handling with personality and recovery suggestions
+  const handleEnhancedError = async (error: any, context?: string) => {
+    const recovery = ErrorRecoverySystem.analyzeError(error);
+    const personalityResponse = AgentPersonality.getErrorMessage(
+      recovery.error, 
+      recovery.suggestion
+    );
+    
+    const enhancedMessage = ErrorRecoverySystem.formatErrorMessage(recovery);
+    const errorMessage = createNewMessage(enhancedMessage, 'System');
+    
+    // Update local state
+    setCurrentChat((prev: ConversationWithMessages | null) => {
+      if (!prev) return { messages: [errorMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+      return { 
+        ...prev, 
+        messages: [...(prev.messages || []), errorMessage]
+      } as ConversationWithMessages;
+    });
+    
+    // Save to database
+    await saveSystemMessageToDatabase(enhancedMessage);
+    
+    // Auto-retry if suggested
+    if (recovery.autoRetry && recovery.retryDelay) {
+      setTimeout(() => {
+        console.log('Auto-retrying after error...');
+        // Could implement retry logic here
+      }, recovery.retryDelay);
+    }
+    
+    return recovery;
+  };
+
+  // Voice command handler
+  const handleVoiceCommand = async (command: any) => {
+    const personalityResponse = AgentPersonality.getVoiceCommandResponse(command.originalText);
+    
+    // Show voice command acknowledgment
+    const voiceMessage = createNewMessage(personalityResponse.message, 'System');
+    setCurrentChat((prev: ConversationWithMessages | null) => {
+      if (!prev) return { messages: [voiceMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+      return { 
+        ...prev, 
+        messages: [...(prev.messages || []), voiceMessage]
+      } as ConversationWithMessages;
+    });
+    
+    await saveSystemMessageToDatabase(personalityResponse.message);
+    
+    // Execute the command
+    try {
+      switch (command.action) {
+        case 'swap':
+          await handleSwapVoiceCommand(command.params);
+          break;
+        case 'transfer':
+          await handleTransferVoiceCommand(command.params);
+          break;
+        case 'balance':
+          await handleFetchBalance({});
+          break;
+        case 'create_token':
+          await handleCreateSPLToken(command.params);
+          break;
+        case 'mint_nft':
+          await handleAction({ type: 'mintNFT', ...command.params });
+          break;
+        case 'create_collection':
+          await handleCreateCollection(command.params);
+          break;
+        default:
+          throw new Error(`Unknown voice command: ${command.action}`);
+      }
+    } catch (error) {
+      await handleEnhancedError(error, `Voice command: ${command.originalText}`);
+    }
+  };
+
+  // Voice command specific handlers
+  const handleSwapVoiceCommand = async (params: any) => {
+    const signature = await processSwap(params);
+    const successResponse = AgentPersonality.getSuccessMessage('swap', 
+      `🎉 Successfully swapped ${params.amount} ${params.from} to ${params.to}!\n\n📝 **Transaction Signature:** ${signature}`);
+    
+    const successMessage = createNewMessage(successResponse.message, 'System');
+    setCurrentChat((prev: ConversationWithMessages | null) => {
+      if (!prev) return { messages: [successMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+      return { 
+        ...prev, 
+        messages: [...(prev.messages || []), successMessage]
+      } as ConversationWithMessages;
+    });
+    
+    await saveSystemMessageToDatabase(successResponse.message);
+  };
+
+  const handleTransferVoiceCommand = async (params: any) => {
+    const signature = await processTransfer(params);
+    const successResponse = AgentPersonality.getSuccessMessage('transfer', 
+      `🎉 Successfully sent ${params.amount} ${params.token} to ${params.recipient}!\n\n📝 **Transaction Signature:** ${signature}`);
+    
+    const successMessage = createNewMessage(successResponse.message, 'System');
+    setCurrentChat((prev: ConversationWithMessages | null) => {
+      if (!prev) return { messages: [successMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+      return { 
+        ...prev, 
+        messages: [...(prev.messages || []), successMessage]
+      } as ConversationWithMessages;
+    });
+    
+    await saveSystemMessageToDatabase(successResponse.message);
+  };
+
+  // Helper function to add personality to regular responses
+  const addPersonality = (content: string): string => {
+    // Add helpful tips occasionally
+    const shouldAddTip = Math.random() < 0.3;
+    if (shouldAddTip) {
+      const tip = AgentPersonality.getHelpfulTip();
+      return `${content}\n\n💡 ${tip.message}`;
+    }
+    
+    // Add encouraging remarks for certain keywords
+    if (content.toLowerCase().includes('success') || content.toLowerCase().includes('completed')) {
+      const encouragement = AgentPersonality.getEncouragingMessage();
+      return `${encouragement.message}\n\n${content}`;
+    }
+    
+    return content;
+  };
+
   const handleAction = async (action: any) => {
     try {
       let signature = "";
@@ -470,9 +645,10 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
         creators: collectionData.creators
       });
       
-      // Add success message with collection address
-      const successContent = `Successfully created collection "${collectionData.name}"!\nCollection Address: ${result.collectionAddress.toString()}\nTransaction: ${result.signature}`;
-      const successMessage = createNewMessage(successContent, 'System');
+      // Add success message with collection address using personality
+      const personalityResponse = AgentPersonality.getSuccessMessage('createCollection', 
+        `📚 **Collection Name:** ${collectionData.name}\n🏷️ **Collection Address:** ${result.collectionAddress.toString()}\n📝 **Transaction:** ${result.signature}`);
+      const successMessage = createNewMessage(personalityResponse.message, 'System');
       
       setCurrentChat((prev: ConversationWithMessages | null) => {
         if (!prev) return null;
@@ -483,20 +659,9 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
       });
       
       // Save to database
-      await saveSystemMessageToDatabase(successContent);
+      await saveSystemMessageToDatabase(personalityResponse.message);
     } catch (error: any) {
-      const errorContent = `Error: ${error.message}`;
-      const errorMessage = createNewMessage(errorContent, 'System');
-      setCurrentChat((prev: ConversationWithMessages | null) => {
-        if (!prev) return { messages: [errorMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
-        return { 
-          ...prev, 
-          messages: [...(prev.messages || []), errorMessage]
-        } as ConversationWithMessages;
-      });
-      
-      // Save error to database
-      await saveSystemMessageToDatabase(errorContent);
+      await handleEnhancedError(error, 'Collection creation');
     }
   };
 
@@ -600,6 +765,15 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
       updatedAt: new Date()
     } as PrismaMessage;
 
+    // Update currentChat state
+    setCurrentChat((prev: ConversationWithMessages | null) => {
+      if (!prev) return { messages: [balanceMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+      return { 
+        ...prev, 
+        messages: [...(prev.messages || []), balanceMessage]
+      } as ConversationWithMessages;
+    });
+    
     // Update messages in ChatContext
     setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
       id: balanceMessage.id,
@@ -691,7 +865,7 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
       </div>
 
       {/* Input Area */}
-      <div className="p-3 border-t border-[#B6B09F] bg-[#000000]">
+      <div className="relative p-3 border-t border-[#B6B09F] bg-[#000000]">
         <form 
           onSubmit={(e) => {
             e.preventDefault();
@@ -701,7 +875,7 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
         >
           <input
             type="text"
-            placeholder="Ask anything about Solana tokens..."
+            placeholder={voiceTranscript || "Ask anything about Solana tokens..."}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => {
@@ -713,6 +887,27 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
             className="flex-1 bg-[#111111] text-[#F2F2F2] text-sm px-3 py-2.5 rounded-lg outline-none border border-[#B6B09F] focus:border-[#EAE4D5] focus:ring-1 focus:ring-[#EAE4D5]/30 transition-colors"
             style={{ fontFamily: "'Josefin Sans', 'Space Grotesk', 'Ubuntu', sans-serif" }}
           />
+          
+          {/* Voice Command Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (isListening) {
+                stopListening();
+              } else {
+                startListening();
+              }
+            }}
+            className={`p-2.5 rounded-lg transition-colors border border-[#B6B09F] ${
+              isListening 
+                ? 'bg-red-500 text-white hover:bg-red-600' 
+                : 'bg-[#2D2D2D] text-[#F2F2F2] hover:bg-[#3D3D3D]'
+            }`}
+            title={isListening ? "Stop Listening" : "Start Voice Command"}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
+          
           <button
             type="submit"
             className="p-2.5 rounded-lg bg-[#EAE4D5] text-[#000000] hover:bg-[#F2F2F2] transition-colors disabled:opacity-50 border border-[#B6B09F]"
