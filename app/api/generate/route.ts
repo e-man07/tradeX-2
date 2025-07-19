@@ -59,6 +59,19 @@ interface CreateCollectionData {
   };
 }
 
+interface CreateSPLTokenData {
+  interface: "createSPLToken";
+  type: "createSPLToken";
+  data: {
+    name: string;
+    symbol: string;
+    description: string;
+    image: string;
+    decimals?: number;
+    initialSupply?: number;
+  };
+}
+
 interface FetchBalanceData {
   interface: "fetchBalance";
   data: {};
@@ -70,6 +83,7 @@ type ActionResponse =
   | PumpFunTokenData
   | NFTMintData
   | CreateCollectionData
+  | CreateSPLTokenData
   | FetchBalanceData
   | {
       error: string;
@@ -259,6 +273,41 @@ const fetchBalanceFunctionDeclaration = {
   },
 };
 
+const createSPLTokenFunctionDeclaration = {
+  name: "createSPLToken",
+  description: "Create a new SPL token on Solana with metadata and initial supply.",
+  parameters: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description: "Name of the SPL token (max 32 characters)",
+      },
+      symbol: {
+        type: "string",
+        description: "Symbol for the token (3-10 characters)",
+      },
+      description: {
+        type: "string",
+        description: "Description of the token and its purpose",
+      },
+      image: {
+        type: "string",
+        description: "URL or uploaded image for the token",
+      },
+      decimals: {
+        type: "number",
+        description: "Number of decimal places (default: 9)",
+      },
+      initialSupply: {
+        type: "number",
+        description: "Initial supply of tokens to mint (default: 1000000)",
+      },
+    },
+    required: ["name", "symbol", "description", "image"],
+  },
+};
+
 // Solana address validation helper
 const isSolanaAddress = (address: string): boolean => {
   // Base58 check and length validation for Solana addresses
@@ -355,6 +404,47 @@ function processResult(functionName: string, args: any): ActionResponse {
           creators: args.creators,
         },
       };
+    case "createSPLToken":
+      if (!args.name || !args.symbol || !args.description || !args.image) {
+        throw new Error("Missing required SPL token parameters");
+      }
+      if (args.symbol.length < 3 || args.symbol.length > 10) {
+        throw new Error("Token symbol must be 3-10 characters");
+      }
+      if (args.name.length > 32) {
+        throw new Error("Token name must be 32 characters or less");
+      }
+      
+      // Validate image URL format
+      try {
+        new URL(args.image); // This will throw if URL is invalid
+      } catch (error) {
+        if (!args.image.startsWith("data:image/")) {
+          // Check if it's a data URL
+          throw new Error("Invalid image URL format");
+        }
+      }
+      
+      // Validate decimals and initial supply
+      if (args.decimals !== undefined && (args.decimals < 0 || args.decimals > 18)) {
+        throw new Error("Decimals must be between 0 and 18");
+      }
+      if (args.initialSupply !== undefined && args.initialSupply <= 0) {
+        throw new Error("Initial supply must be greater than 0");
+      }
+      
+      return {
+        interface: "createSPLToken",
+        type: "createSPLToken",
+        data: {
+          name: args.name,
+          symbol: args.symbol,
+          description: args.description,
+          image: args.image,
+          decimals: args.decimals || 9,
+          initialSupply: args.initialSupply || 1000000,
+        },
+      };
     case "fetchBalance":
       return {
         interface: "fetchBalance",
@@ -408,6 +498,23 @@ const functions: Record<string, Function> = {
       creators,
     });
   },
+  createSPLToken: async ({
+    name,
+    symbol,
+    description,
+    image,
+    decimals,
+    initialSupply,
+  }: any) => {
+    return processResult("createSPLToken", {
+      name,
+      symbol,
+      description,
+      image,
+      decimals,
+      initialSupply,
+    });
+  },
   fetchBalance: async () => {
     return processResult("fetch_balance", {});
   },
@@ -452,6 +559,7 @@ export const POST = async (req: Request): Promise<Response> => {
             createTokenFunctionDeclaration,
             mintNFTFunctionDeclaration,
             createCollectionFunctionDeclaration,
+            createSPLTokenFunctionDeclaration,
             fetchBalanceFunctionDeclaration,
           ],
         } as FunctionDeclarationsTool,
@@ -488,10 +596,15 @@ export const POST = async (req: Request): Promise<Response> => {
           - Ensure proper decimal places for different tokens
 
           For SPL TOKEN CREATION:
-          - Guide users through SPL token creation process
-          - Collect required metadata for token
-          - Support Metaplex metadata standards
-          - Handle token image storage on Arweave
+          - "create SPL token named MyToken with symbol MTK and description 'A utility token for my project'"
+          - "make a new token called GameCoin with symbol GAME, 1 million initial supply, and 6 decimals"
+          - "create token ProjectX with symbol PX, description 'Governance token for ProjectX DAO', and image https://example.com/token-logo.png"
+          - Name should be descriptive (max 32 characters)
+          - Symbol must be 3-10 characters, usually uppercase
+          - Description should explain the token's purpose
+          - Images must be valid URLs or data URIs
+          - Decimals default to 9 (0-18 allowed)
+          - Initial supply defaults to 1,000,000 tokens
 
           For NFT COLLECTION CREATION:
           - Name should be descriptive and concise (max 32 chars)

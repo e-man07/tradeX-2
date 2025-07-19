@@ -1,5 +1,5 @@
 {
-  "name": "tradeX",
+  "name": "tradex",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -16,8 +16,11 @@
     "@hookform/resolvers": "^3.10.0",
     "@metaplex-foundation/js": "^0.20.1",
     "@metaplex-foundation/mpl-token-metadata": "^3.3.0",
+    "@metaplex-foundation/mpl-toolbox": "^0.9.4",
     "@metaplex-foundation/umi": "^0.9.2",
     "@metaplex-foundation/umi-bundle-defaults": "^0.9.2",
+    "@metaplex-foundation/umi-uploader-irys": "^0.9.2",
+    "@metaplex-foundation/umi-web3js-adapters": "^0.9.2",
     "@metaplex/js": "^4.12.0",
     "@prisma/client": "^6.1.0",
     "@project-serum/anchor": "^0.26.0",

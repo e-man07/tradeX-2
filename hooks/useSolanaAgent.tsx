@@ -17,11 +17,33 @@ import bs58 from 'bs58';
 
 import {
   Metaplex,
-  keypairIdentity,
+  keypairIdentity as metaplexKeypairIdentity,
 } from "@metaplex-foundation/js";
 
 import { Keypair } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  createFungible,
+  TokenStandard,
+  mplTokenMetadata,
+} from '@metaplex-foundation/mpl-token-metadata';
+import {
+  createTokenIfMissing,
+  findAssociatedTokenPda,
+  getSplAssociatedTokenProgramId,
+  mintTokensTo,
+} from '@metaplex-foundation/mpl-toolbox';
+import {
+  generateSigner,
+  percentAmount,
+  createGenericFile,
+  keypairIdentity,
+  sol,
+} from '@metaplex-foundation/umi';
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
+import { fromWeb3JsKeypair } from '@metaplex-foundation/umi-web3js-adapters';
+
+// import { irysUploader } from '@metaplex-foundation/umi-uploader-irys';
 // import { mintTo, createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 
 
@@ -65,6 +87,15 @@ interface CollectionData {
   }>;
 }
 
+interface SPLTokenData {
+  name: string;
+  symbol: string;
+  description: string;
+  image: string | File | Uint8Array;
+  decimals?: number;
+  initialSupply?: number;
+}
+
 interface AgentContextProps {
   processSwap: (data: SwapData) => Promise<string>;
   processTransfer: (data: TransferData) => Promise<string>;
@@ -73,7 +104,7 @@ interface AgentContextProps {
   // ) => Promise<{ signature: string; tokenAddress: string; metadataURI: any }>;
   processNFTMint: (data: NFTMintData) => Promise<{mint: PublicKey; metadata: PublicKey}>;
   processcreateCollection: (data: CollectionData) => Promise<{ collectionAddress: PublicKey; signature: string }>;
-
+  processSPLTokenCreation: (data: SPLTokenData) => Promise<{ tokenAddress: PublicKey; signature: string; metadataUri: string }>;
 }
 
 const AgentContext = createContext<AgentContextProps | null>(null);
@@ -148,7 +179,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     
     // Use the built-in storage instead of bundlrStorage plugin
     return Metaplex.make(connection)
-      .use(keypairIdentity(keyPair));
+      .use(metaplexKeypairIdentity(keyPair));
   }; 
 
   //send transaction
@@ -471,7 +502,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
           await connection.getLatestBlockhash();
           
           metaplex = Metaplex.make(connection)
-            .use(keypairIdentity(keyPair));
+            .use(metaplexKeypairIdentity(keyPair));
           
           console.log("Successfully connected to RPC");
           break;
@@ -804,9 +835,196 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  /**
+   * Function for creating SPL tokens using Metaplex
+   * @param data 
+   * @returns 
+   */
+  const processSPLTokenCreation = async (
+    data: SPLTokenData
+  ): Promise<{ tokenAddress: PublicKey; signature: string; metadataUri: string }> => {
+    if (!keyPair) {
+      throw new Error("Keypair is not initialized.");
+    }
+
+    const { name, symbol, description, image, decimals = 9, initialSupply = 1000000 } = data;
+
+    try {
+      console.log("Starting SPL token creation process with data:", {
+        name,
+        symbol,
+        description,
+        hasImage: !!image,
+        decimals,
+        initialSupply
+      });
+      
+      // Try multiple RPC endpoints in case the primary one fails
+      const rpcEndpoints = [
+        `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
+        'https://api.devnet.solana.com',              // 👈 DEVNET
+        'https://devnet.genesysgo.net'                // 👈 DEVNET
+      ];
+      
+      let connection;
+      let umi;
+      
+      // Try each RPC endpoint until one works
+      for (const endpoint of rpcEndpoints) {
+        try {
+          console.log(`Attempting with RPC endpoint: ${endpoint.split('?')[0]}`);
+          connection = new Connection(endpoint, 'confirmed');
+          
+          // Check if the RPC is responsive
+          await connection.getLatestBlockhash();
+          
+          // Initialize Umi with keypair identity
+          const umiKeypair = fromWeb3JsKeypair(keyPair);
+          umi = createUmi(endpoint)
+            .use(mplTokenMetadata())
+            // .use(irysUploader()) // Commented out for now
+            .use(keypairIdentity(umiKeypair));
+          
+          console.log("Successfully connected to RPC");
+          break;
+        } catch (rpcError) {
+          console.warn(`RPC endpoint ${endpoint.split('?')[0]} failed, trying next...`);
+        }
+      }
+      
+      if (!connection || !umi) {
+        throw new Error("Failed to connect to any RPC endpoint. Please try again later.");
+      }
+      
+      // Handle image processing
+      let imageFile: File;
+      try {
+        if (typeof image === "string") {
+          const imageResponse = await fetch(image);
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+          }
+          const imageBlob = await imageResponse.blob();
+          imageFile = new File([imageBlob], "token_image.png", { 
+            type: imageResponse.headers.get('content-type') || "image/png" 
+          });
+        } else if (image instanceof File) {
+          imageFile = image;
+        } else if (image instanceof Uint8Array) {
+          imageFile = new File([image], "token_image.png", { type: "image/png" });
+        } else {
+          throw new Error("Invalid image format");
+        }
+      } catch (imageError: any) {
+        throw new Error(`Image processing failed: ${imageError.message}`);
+      }
+
+      // Upload to IPFS using your existing API
+      console.log("Uploading token metadata to IPFS...");
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("symbol", symbol);
+      formData.append("description", description);
+      formData.append("file", imageFile);
+      
+      const ipfsResponse = await fetch("/api/ipfs", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!ipfsResponse.ok) {
+        const errorData = await ipfsResponse.json();
+        throw new Error(`IPFS upload failed: ${errorData.error || ipfsResponse.statusText}`);
+      }
+
+      const ipfsData = await ipfsResponse.json();
+      console.log("Metadata uploaded to IPFS:", ipfsData.metadataUri);
+      
+      if (!ipfsData.metadataUri) {
+        throw new Error("IPFS response did not include a metadata URI");
+      }
+
+      // Create the SPL token using Metaplex Umi
+      console.log("Creating SPL token with Metaplex...");
+      
+      try {
+        // Generate a new mint signer
+        const mintSigner = generateSigner(umi);
+        
+        console.log("Generated mint address:", mintSigner.publicKey);
+        
+        // Create the fungible token
+        const createTokenTx = createFungible(umi, {
+          mint: mintSigner,
+          name: name,
+          symbol: symbol,
+          uri: ipfsData.metadataUri,
+          sellerFeeBasisPoints: percentAmount(0), // No royalties for fungible tokens
+          decimals: decimals,
+        });
+        
+        // Create token account if missing
+        const createTokenAccountTx = createTokenIfMissing(umi, {
+          mint: mintSigner.publicKey,
+          owner: umi.identity.publicKey,
+          ataProgram: getSplAssociatedTokenProgramId(umi),
+        });
+        
+        // Mint initial supply to the creator
+        const mintTokensTx = mintTokensTo(umi, {
+          mint: mintSigner.publicKey,
+          token: findAssociatedTokenPda(umi, {
+            mint: mintSigner.publicKey,
+            owner: umi.identity.publicKey,
+          }),
+          amount: BigInt(initialSupply * Math.pow(10, decimals)),
+        });
+        
+        // Combine all transactions
+        const combinedTx = createTokenTx
+          .add(createTokenAccountTx)
+          .add(mintTokensTx);
+        
+        console.log("Sending combined transaction...");
+        const result = await combinedTx.sendAndConfirm(umi, {
+          confirm: { commitment: 'confirmed' },
+        });
+        
+        console.log("SPL token created successfully:", {
+          signature: result.signature,
+          tokenAddress: mintSigner.publicKey,
+        });
+        
+        return {
+          tokenAddress: new PublicKey(mintSigner.publicKey.toString()),
+          signature: result.signature.toString(),
+          metadataUri: ipfsData.metadataUri
+        };
+      } catch (tokenError: any) {
+        console.error("Error creating SPL token:", tokenError);
+        
+        if (tokenError.logs) {
+          console.error("Transaction logs:", tokenError.logs);
+        }
+        
+        // Specific error handling
+        if (tokenError.message && tokenError.message.includes("insufficient funds")) {
+          throw new Error("Insufficient SOL to pay for the token creation. Please add more SOL to your wallet.");
+        } else if (tokenError.message && tokenError.message.includes("AccountNotFoundError")) {
+          throw new Error("RPC node is having synchronization issues. Please try again in a few minutes.");
+        } else {
+          throw new Error(`Token creation failed: ${tokenError.message}`);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error in processSPLTokenCreation:", error);
+      throw new Error(`Failed to create SPL token: ${error.message}`);
+    }
+  };
+
   return (
     <AgentContext.Provider
-      value={{ processSwap, processTransfer, processNFTMint, processcreateCollection }}
+      value={{ processSwap, processTransfer, processNFTMint, processcreateCollection, processSPLTokenCreation }}
     >
       {children}
     </AgentContext.Provider>

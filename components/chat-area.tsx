@@ -32,7 +32,7 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
   const [isTyping, setIsTyping] = useState(false);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const { pubKey } = useWallet();
-  const { processSwap, processTransfer, processNFTMint, processcreateCollection } = useSolanaAgent();
+  const { processSwap, processTransfer, processNFTMint, processcreateCollection, processSPLTokenCreation } = useSolanaAgent();
   const balanceContext = useContext(BalanceContext);
   // Get shared state from ChatContext
   const { clearMessages, setClearMessages, messages, setMessages, currentConversationId, setCurrentConversationId, loadConversation, setShouldRefreshConversations } = useChatContext();
@@ -326,6 +326,9 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
         case "createCollection":
           await handleCreateCollection(result.data.response);
           break;
+        case "createSPLToken":
+          await handleCreateSPLToken(result.data.response);
+          break;
         case "fetchBalance": 
           await handleFetchBalance(result.data.response);
           break;
@@ -472,6 +475,90 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           messages: [...(prev.messages || []), errorMessage]
         } as ConversationWithMessages;
       });
+    }
+  };
+
+  const handleCreateSPLToken = async (action: any) => {
+    try {
+      const tokenData = action.data;
+      const result = await processSPLTokenCreation({
+        name: tokenData.name,
+        symbol: tokenData.symbol,
+        description: tokenData.description,
+        image: tokenData.image,
+        decimals: tokenData.decimals || 9,
+        initialSupply: tokenData.initialSupply || 1000000
+      });
+      
+      // Add success message with token details
+      const successMessage = createNewMessage(
+        `🪙 SPL Token created successfully!\n` +
+        `📛 Name: ${tokenData.name}\n` +
+        `🔖 Symbol: ${tokenData.symbol}\n` +
+        `📍 Token Address: ${result.tokenAddress.toString()}\n` +
+        `🔗 Transaction: ${result.signature}\n` +
+        `📊 Initial Supply: ${tokenData.initialSupply || 1000000} tokens\n` +
+        `🎯 Decimals: ${tokenData.decimals || 9}\n` +
+        `📝 Metadata: ${result.metadataUri}`,
+        'System'
+      );
+      
+      setCurrentChat((prev: ConversationWithMessages | null) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: [...(prev.messages || []), successMessage]
+        };
+      });
+      
+      // Update messages in ChatContext
+      setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
+        id: successMessage.id,
+        content: successMessage.content,
+        sender: successMessage.senderType as 'User' | 'System',
+        chatId: currentChat?.id
+      }]);
+      
+      // If we have a valid conversation ID, send the success message to the API
+      if (currentChat?.id && isValidObjectId(currentChat.id)) {
+        try {
+          await conversationsApi.addMessages(currentChat.id, [{
+            content: successMessage.content,
+            senderType: 'System'
+          }]);
+        } catch (error) {
+          console.error('Failed to save SPL token success message to API:', error);
+        }
+      }
+    } catch (error: any) {
+      const errorMessage = createNewMessage(`❌ SPL Token creation failed: ${error.message}`, 'System');
+      setCurrentChat((prev: ConversationWithMessages | null) => {
+        if (!prev) return { messages: [errorMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
+        return { 
+          ...prev, 
+          messages: [...(prev.messages || []), errorMessage]
+        } as ConversationWithMessages;
+      });
+      
+      // Update messages in ChatContext
+      setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
+        id: errorMessage.id,
+        content: errorMessage.content,
+        sender: errorMessage.senderType as 'User' | 'System',
+        chatId: currentChat?.id
+      }]);
+      
+      // If we have a valid conversation ID, send the error message to the API
+      if (currentChat?.id && isValidObjectId(currentChat.id)) {
+        try {
+          await conversationsApi.addMessages(currentChat.id, [{
+            content: errorMessage.content,
+            senderType: 'System'
+          }]);
+        } catch (apiError) {
+          console.error('Failed to save SPL token error message to API:', apiError);
+        }
+      }
     }
   };
 
