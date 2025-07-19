@@ -394,6 +394,14 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           } as ConversationWithMessages;
         });
         
+        // Update messages in ChatContext
+        setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
+          id: signatureMessage.id,
+          content: signatureMessage.content,
+          sender: signatureMessage.senderType as 'User' | 'System',
+          chatId: currentChat?.id
+        }]);
+        
         // If we have a valid conversation ID, send the signature message to the API
         if (currentChat?.id && isValidObjectId(currentChat.id)) {
           try {
@@ -613,6 +621,14 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
             };
           });
           
+          // Update messages in ChatContext
+          setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
+            id: successMessage.id,
+            content: successMessage.content,
+            sender: successMessage.senderType as 'User' | 'System',
+            chatId: currentChat?.id
+          }]);
+          
           // Save to database
           await saveSystemMessageToDatabase(successContent);
           break;
@@ -657,6 +673,14 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           messages: [...(prev.messages || []), successMessage]
         };
       });
+      
+      // Update messages in ChatContext
+      setMessages((prevMessages: ChatMessage[]) => [...prevMessages, {
+        id: successMessage.id,
+        content: successMessage.content,
+        sender: successMessage.senderType as 'User' | 'System',
+        chatId: currentChat?.id
+      }]);
       
       // Save to database
       await saveSystemMessageToDatabase(personalityResponse.message);
