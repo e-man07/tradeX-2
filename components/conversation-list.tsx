@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/AuthContext";
 import { conversationsApi } from "@/utils/api";
+import { useChatContext } from "@/hooks/ChatContext";
 
 type Conversation = {
   id: string;
@@ -13,6 +14,7 @@ type Conversation = {
 
 export default function ConversationList() {
   const { user, isLoading: authLoading } = useAuth();
+  const { loadConversation } = useChatContext();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,9 +106,14 @@ const handleCreateConversation = async (e: React.FormEvent) => {
             <li 
               key={conversation.id} 
               className="p-3 border rounded hover:bg-gray-100 cursor-pointer"
-              onClick={() => {
-                // Navigate to conversation or handle selection
-                console.log("Selected conversation:", conversation.id);
+              onClick={async () => {
+                console.log("Loading conversation:", conversation.id);
+                try {
+                  await loadConversation(conversation.id);
+                  console.log("Successfully loaded conversation:", conversation.id);
+                } catch (error) {
+                  console.error("Failed to load conversation:", error);
+                }
               }}
             >
               <h3 className="font-medium">{conversation.title}</h3>

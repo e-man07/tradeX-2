@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       include: {
         messages: {
           orderBy: {
-            createdAt: "desc",
+            createdAt: "asc",
           },
         },
       },

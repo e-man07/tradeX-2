@@ -393,6 +393,22 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
     }
   };
 
+  // Helper function to save system messages to database
+  const saveSystemMessageToDatabase = async (content: string) => {
+    if (currentChat?.id && isValidObjectId(currentChat.id)) {
+      try {
+        await conversationsApi.addMessages(currentChat.id, [{
+          content,
+          senderType: 'System'
+        }]);
+        console.log('Successfully saved system message to database');
+      } catch (error) {
+        console.error('Failed to save system message to database:', error);
+      }
+    } else {
+      console.warn('System message NOT saved to database - invalid conversation ID');
+    }
+  };
 
   const handleAction = async (action: any) => {
     try {
@@ -411,10 +427,8 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           });
           
           // Add success message
-          const successMessage = createNewMessage(
-            `✅ NFT minted successfully!\nMint Address: ${result.mint.toString()}\nMetadata Address: ${result.metadata.toString()}`,
-            'System'
-          );
+          const successContent = `✅ NFT minted successfully!\nMint Address: ${result.mint.toString()}\nMetadata Address: ${result.metadata.toString()}`;
+          const successMessage = createNewMessage(successContent, 'System');
           
           setCurrentChat((prev: ConversationWithMessages | null) => {
             if (!prev) return null;
@@ -423,6 +437,9 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
               messages: [...(prev.messages || []), successMessage]
             };
           });
+          
+          // Save to database
+          await saveSystemMessageToDatabase(successContent);
           break;
         }
         default:
@@ -454,10 +471,8 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
       });
       
       // Add success message with collection address
-      const successMessage = createNewMessage(
-        `Successfully created collection "${collectionData.name}"!\nCollection Address: ${result.collectionAddress.toString()}\nTransaction: ${result.signature}`,
-        'System'
-      );
+      const successContent = `Successfully created collection "${collectionData.name}"!\nCollection Address: ${result.collectionAddress.toString()}\nTransaction: ${result.signature}`;
+      const successMessage = createNewMessage(successContent, 'System');
       
       setCurrentChat((prev: ConversationWithMessages | null) => {
         if (!prev) return null;
@@ -466,8 +481,12 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           messages: [...(prev.messages || []), successMessage]
         };
       });
+      
+      // Save to database
+      await saveSystemMessageToDatabase(successContent);
     } catch (error: any) {
-      const errorMessage = createNewMessage(`Error: ${error.message}`, 'System');
+      const errorContent = `Error: ${error.message}`;
+      const errorMessage = createNewMessage(errorContent, 'System');
       setCurrentChat((prev: ConversationWithMessages | null) => {
         if (!prev) return { messages: [errorMessage], createdAt: new Date(), updatedAt: new Date(), isArchived: false } as ConversationWithMessages;
         return { 
@@ -475,6 +494,9 @@ export function ChatArea({ currentChat, setCurrentChat }: ChatAreaProps) {
           messages: [...(prev.messages || []), errorMessage]
         } as ConversationWithMessages;
       });
+      
+      // Save error to database
+      await saveSystemMessageToDatabase(errorContent);
     }
   };
 
