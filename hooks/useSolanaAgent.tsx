@@ -3,11 +3,8 @@
 import { SolanaAgentKit } from "solana-agent-kit";
 import { useWallet } from "./useWallet";
 import {
-  launchPumpFunToken,
   trade,
-  transfer,
-  mintCollectionNFT,
-  deploy_collection,
+  transfer
 } from "solana-agent-kit/dist/tools";
 import { useBalance } from "./useBalance";
 import { createContext, useContext } from "react";
@@ -43,8 +40,7 @@ import {
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { fromWeb3JsKeypair } from '@metaplex-foundation/umi-web3js-adapters';
 
-// import { irysUploader } from '@metaplex-foundation/umi-uploader-irys';
-// import { mintTo, createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+
 
 
 interface SwapData {
@@ -99,9 +95,6 @@ interface SPLTokenData {
 interface AgentContextProps {
   processSwap: (data: SwapData) => Promise<string>;
   processTransfer: (data: TransferData) => Promise<string>;
-  // processPumpFunToken: (
-  //   data: pumpFunTokenData
-  // ) => Promise<{ signature: string; tokenAddress: string; metadataURI: any }>;
   processNFTMint: (data: NFTMintData) => Promise<{mint: PublicKey; metadata: PublicKey}>;
   processcreateCollection: (data: CollectionData) => Promise<{ collectionAddress: PublicKey; signature: string }>;
   processSPLTokenCreation: (data: SPLTokenData) => Promise<{ tokenAddress: PublicKey; signature: string; metadataUri: string }>;
@@ -272,192 +265,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // /**
-  //  * Function for creating the token and minting it 
-  //  * @param data 
-  //  * @returns 
-  //  */
-  // const processPumpFunToken = async (
-  //   data: pumpFunTokenData
-  // ): Promise<{ signature: string; tokenAddress: string; metadataURI: any }> => {
-  //   if (!keyPair) {
-  //     throw new Error("Keypair is not initialized.");
-  //   }
-
-  //   const { tokenName, tokenTicker, tokenDescription, tokenImage } = data;
-    
-  //   try {
-  //     console.log("Starting token creation process with data:", {
-  //       tokenName,
-  //       tokenTicker,
-  //       tokenDescription,
-  //       hasImage: !!tokenImage,
-  //     });
-      
-  //     // Try multiple RPC endpoints in case the primary one fails
-  //     const rpcEndpoints = [
-  //       `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-  //       'https://api.devnet.solana.com',
-  //       'https://devnet.genesysgo.net'
-  //     ];
-      
-  //     let connection;
-      
-  //     // Try each RPC endpoint until one works
-  //     for (const endpoint of rpcEndpoints) {
-  //       try {
-  //         console.log(`Attempting with RPC endpoint: ${endpoint.split('?')[0]}`);
-  //         connection = new Connection(endpoint, 'confirmed');
-          
-  //         // Check if the RPC is responsive
-  //         await connection.getLatestBlockhash();
-  //         console.log("Successfully connected to RPC");
-  //         break;
-  //       } catch (rpcError) {
-  //         console.warn(`RPC endpoint ${endpoint.split('?')[0]} failed, trying next...`);
-  //       }
-  //     }
-      
-  //     if (!connection) {
-  //       throw new Error("Failed to connect to any RPC endpoint. Please try again later.");
-  //     }
-      
-  //     // Process image for IPFS
-  //     let imageFile: File;
-  //     try {
-  //       if (typeof tokenImage === "string") {
-  //         console.log("Fetching image from URL:", tokenImage.substring(0, 50) + "...");
-  //         const imageResponse = await fetch(tokenImage);
-  //         if (!imageResponse.ok) {
-  //           throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
-  //         }
-  //         const imageBlob = await imageResponse.blob();
-  //         imageFile = new File([imageBlob], "token_image.png", { type: imageResponse.headers.get('content-type') || "image/png" });
-  //         console.log("Successfully converted image URL to File object");
-  //       } else if (tokenImage instanceof File) {
-  //         imageFile = tokenImage;
-  //         console.log("Using provided File object for image");
-  //       } else {
-  //         throw new Error("Invalid image file format. Please provide a URL or File object.");
-  //       }
-  //     } catch (imageError: any) {
-  //       console.error("Image processing error:", imageError);
-  //       throw new Error(`Failed to process token image: ${imageError.message}`);
-  //     }
-      
-  //     // Upload to IPFS
-  //     console.log("Preparing to upload token metadata to IPFS");
-  //     const formData = new FormData();
-  //     formData.append("name", tokenName);
-  //     formData.append("symbol", tokenTicker);
-  //     formData.append("description", tokenDescription);
-  //     formData.append("showName", "true");
-  //     formData.append("file", imageFile);
-      
-  //     const response = await fetch("/api/ipfs", {
-  //       method: "POST",
-  //       body: formData,
-  //     });
-      
-  //     if (!response.ok) {
-  //       const errorData = await response.json();
-  //       console.error("Token metadata upload failed:", errorData);
-  //       throw new Error(`IPFS upload failed: ${errorData.error || response.statusText}`);
-  //     }
-      
-  //     const ipfsData = await response.json();
-  //     console.log("Token metadata uploaded to IPFS:", ipfsData);
-  //     if (!ipfsData.metadataUri) {
-  //       throw new Error("IPFS response did not include a metadata URI");
-  //     }
-      
-  //     // Create token using direct SPL Token approach instead of Metaplex
-  //     console.log("Creating token with SPL Token program...");
-  //     const decimals = 9; // Standard decimals for new token
-      
-  //     try {
-  //       // Create mint transaction
-  //       console.log("Creating token mint...");
-  //       const mintKeypair = Keypair.generate();
-        
-  //       console.log("Generated mint keypair:", mintKeypair.publicKey.toString());
-        
-  //       // FIX: Use imported token functions
-  //       // Create the actual mint
-  //       const mintTx = await createMint(
-  //         connection,
-  //         keyPair,             // Payer (from keypair)
-  //         keyPair.publicKey,   // Mint authority
-  //         keyPair.publicKey,   // Freeze authority (same as mint authority)
-  //         decimals,
-  //         mintKeypair
-  //       );
-        
-  //       console.log("Token mint created with tx:", mintTx);
-        
-  //       // Wait for confirmation
-  //       console.log("Waiting for token mint confirmation...");
-  //       await connection.confirmTransaction(mintTx, 'confirmed');
-        
-  //       const tokenAddress = mintKeypair.publicKey.toString();
-  //       console.log("Token created with address:", tokenAddress);
-        
-  //       // Create token account for the user
-  //       console.log("Creating token account for the user...");
-  //       const tokenAccount = await getOrCreateAssociatedTokenAccount(
-  //         connection,
-  //         keyPair,
-  //         mintKeypair.publicKey,
-  //         keyPair.publicKey
-  //       );
-        
-  //       console.log("Token account created:", tokenAccount.address.toString());
-        
-  //       // Define token supply - 1 billion tokens (with decimals)
-  //       const supply = 1_000_000_000 * Math.pow(10, decimals);
-        
-  //       // Mint initial supply to the user's token account
-  //       console.log("Minting initial supply...");
-  //       const mintToTx = await mintTo(
-  //         connection,
-  //         keyPair,
-  //         mintKeypair.publicKey,
-  //         tokenAccount.address,
-  //         keyPair.publicKey,
-  //         supply
-  //       );
-        
-  //       console.log("Initial supply minted with tx:", mintToTx);
-  //       console.log("Waiting for mint confirmation...");
-  //       await connection.confirmTransaction(mintToTx, 'confirmed');
-        
-  //       console.log("Token creation completed successfully");
-        
-  //       return {
-  //         signature: mintToTx,
-  //         tokenAddress: tokenAddress,
-  //         metadataURI: ipfsData.metadataUri
-  //       };
-  //     } catch (tokenError: any) {
-  //       console.error("Error during token creation:", tokenError);
-        
-  //       // Detailed error logging
-  //       if (tokenError.logs) {
-  //         console.error("Transaction logs:", tokenError.logs);
-  //       }
-        
-  //       // Check specific error types
-  //       if (tokenError.message && tokenError.message.includes("insufficient funds")) {
-  //         throw new Error("Insufficient SOL to pay for the token creation. Please add more SOL to your wallet.");
-  //       }
-        
-  //       throw new Error(`Token creation failed: ${tokenError.message}`);
-  //     }
-  //   } catch (error: any) {
-  //     console.error("Error in processPumpFunToken:", error);
-  //     throw new Error(`Token creation failed: ${error.message}`);
-  //   }
-  // };
+  
   
   /**
    * Function for creating the collection 
