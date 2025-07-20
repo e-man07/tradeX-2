@@ -7,6 +7,7 @@ import { BalanceProvider } from "@/hooks/useBalance";
 import { AgentProvider } from "@/hooks/useSolanaAgent";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AuthProvider } from "@/hooks/AuthContext";
+import { NetworkProvider } from "@/contexts/NetworkContext";
 
 
 const geistSans = Geist({
@@ -35,20 +36,22 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <WalletProvider>
-            <BalanceProvider>
-              <AgentProvider>
-                <ThemeProvider
-                  attribute="class"
-                  defaultTheme="dark"
-                  enableSystem
-                  disableTransitionOnChange
-                >
-                  {children}
-                </ThemeProvider>
-              </AgentProvider>
-            </BalanceProvider>
-          </WalletProvider>
+          <NetworkProvider>
+            <WalletProvider>
+              <BalanceProvider>
+                <AgentProvider>
+                  <ThemeProvider
+                    attribute="class"
+                    defaultTheme="dark"
+                    enableSystem
+                    disableTransitionOnChange
+                  >
+                    {children}
+                  </ThemeProvider>
+                </AgentProvider>
+              </BalanceProvider>
+            </WalletProvider>
+          </NetworkProvider>
         </AuthProvider>
       </body>
     </html>

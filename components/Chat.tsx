@@ -23,6 +23,7 @@ import { ChatArea } from "./chat-area";
 import { ArrowUp, ArrowUpRight, Sparkles } from "lucide-react";
 import { ChatProvider } from "@/hooks/ChatContext";
 import { Message, Conversation } from '@prisma/client';
+import NetworkToggle from "./NetworkToggle";
 
 interface ConversationWithMessages extends Conversation {
   messages?: Message[];
@@ -183,6 +184,9 @@ export default function Chat() {
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
+            </div>
+            <div className="ml-auto">
+              <NetworkToggle />
             </div>
           </header>
 

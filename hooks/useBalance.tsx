@@ -9,6 +9,7 @@ import {
 } from "@solana/web3.js";
 import { createContext, useContext, useEffect, useState } from "react";
 import { useWallet } from "./useWallet";
+import { useNetwork } from "../contexts/NetworkContext";
 
 import { programs } from "@metaplex/js";
 
@@ -46,8 +47,9 @@ export const BalanceContext = createContext<BalanceContextProps | null>(null);
 export const BalanceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const { rpcEndpoint } = useNetwork();
   const connection = new Connection(
-    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
+    rpcEndpoint,
     "confirmed"
   );
   const { pubKey, isAuthenticated, walletExists } = useWallet();

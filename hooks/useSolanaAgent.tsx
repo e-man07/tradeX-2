@@ -9,6 +9,7 @@ import {
 import { useBalance } from "./useBalance";
 import { createContext, useContext } from "react";
 import { clusterApiUrl, Connection, PublicKey } from "@solana/web3.js";
+import { useNetwork } from '../contexts/NetworkContext';
 import { TokenListProvider } from "@solana/spl-token-registry";
 import bs58 from 'bs58';
 
@@ -107,11 +108,33 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { keyPair, secKey, isAuthenticated } = useWallet();
   const { tokens } = useBalance();
+  const { network, rpcEndpoint, chainId } = useNetwork();
 
   // Do not initialize if the user is not authenticated
   if (!isAuthenticated) {
     return <>{children}</>;
   }
+
+  // Helper function to get RPC endpoints based on network
+  const getRpcEndpoints = () => {
+    if (network === 'mainnet-beta') {
+      return [
+        process.env.NEXT_PUBLIC_HELIUS_API_KEY 
+          ? `https://mainnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`
+          : clusterApiUrl('mainnet-beta'),
+        'https://api.mainnet-beta.solana.com',
+        'https://solana-api.projectserum.com'
+      ];
+    } else {
+      return [
+        process.env.NEXT_PUBLIC_HELIUS_API_KEY
+          ? `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`
+          : clusterApiUrl('devnet'),
+        'https://api.devnet.solana.com',
+        'https://devnet.genesysgo.net'
+      ];
+    }
+  };
 
   // Get token mint details from wallet
   const getTokenMintDetails = (
@@ -150,7 +173,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
     const tokenListProvider = new TokenListProvider();
     const tokenList = await tokenListProvider.resolve();
     console.log("tokenlist", tokenList);
-    const tokens = tokenList.filterByChainId(103).getList(); // Devnet chainId is 103 and mainnet is 101 
+    const tokens = tokenList.filterByChainId(chainId).getList(); 
     const token = tokens.find((t) => t.symbol === symbol);
     return token ? token.address : null;
   }
@@ -158,13 +181,13 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
   //Initialize agent
   const agent = new SolanaAgentKit(
     `${secKey}`,
-    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
+    rpcEndpoint,
     `${process.env.GEMINI_API_KEY}`,
   );
 
   // Initialze metaplex 
   const connection = new Connection(
-    `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}` || clusterApiUrl('devnet')
+    rpcEndpoint || clusterApiUrl(network)
   );
   
   const getMetaplex = () => {
@@ -290,11 +313,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
       });
       
       // Try multiple RPC endpoints in case the primary one fails
-      const rpcEndpoints = [
-        `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-        'https://api.devnet.solana.com',
-        'https://devnet.genesysgo.net'
-      ];
+      const rpcEndpoints = getRpcEndpoints();
       
       let connection;
       let metaplex;
@@ -465,11 +484,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
       });
       
       // Try multiple RPC endpoints in case the primary one fails
-      const rpcEndpoints = [
-        `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-        'https://api.devnet.solana.com',
-        'https://devnet.genesysgo.net'
-      ];
+      const rpcEndpoints = getRpcEndpoints();
       
       let connection;
       let metaplex;
@@ -699,11 +714,7 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({
       });
       
       // Try multiple RPC endpoints in case the primary one fails
-      const rpcEndpoints = [
-        `https://devnet.helius-rpc.com?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-        'https://api.devnet.solana.com',              // 👈 DEVNET
-        'https://devnet.genesysgo.net'                // 👈 DEVNET
-      ];
+      const rpcEndpoints = getRpcEndpoints();
       
       let connection;
       let umi;
